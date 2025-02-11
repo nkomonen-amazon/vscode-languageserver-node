@@ -5,6 +5,7 @@
 /// <reference path="../../typings/thenable.d.ts" preserve="true"/>
 
 import { inspect } from 'node:util';
+import fs from 'fs';
 
 import * as Is from '../common/utils/is';
 import { parseCliOpts } from '../common/utils/process';
@@ -92,6 +93,50 @@ function endProtocolConnection(): void {
 	}
 }
 
+const logFolder = `/Users/nkomonen/Desktop/temp`;
+const logFile = `${logFolder}/server`;
+fs.rmSync(logFile, { recursive: true, force: true });
+function logMessage(message: string) {
+	fs.appendFileSync(logFile, `${message}\n------\n`);
+}
+
+function processInfo(prefix: string) {
+	let gid = -1;
+	if (process.getgid) {
+		gid = process.getgid();
+	}
+	let groups = 'none';
+	if (process.getgroups) {
+		groups = process.getgroups().join(', ');
+	}
+	let egid = -1;
+	if (process.getegid) {
+		egid = process.getegid();
+	}
+	let userId = -1;
+	if (process.getuid) {
+		userId = process.getuid();
+	}
+	let euid = -1;
+	if (process.geteuid) {
+		euid = process.geteuid();
+	}
+	logMessage(`${prefix}
+    PID: ${process.pid}
+    PPID: ${process.ppid}
+    Groups: ${groups}
+    Group ID: ${gid}
+    User ID: ${userId}
+    Effective User ID: ${euid}
+    Effective Group ID: ${egid}
+    Platform: ${process.platform}
+    Current Working Directory: ${process.cwd()}
+    Title: ${process.title}
+    Process argv: ${process.argv.join(' ')}
+    Detached status: ${isDetached()}`);
+}
+processInfo('On SERVER init');
+
 let _shutdownReceived: boolean = false;
 let exitTimer: NodeJS.Timer | undefined = undefined;
 
@@ -136,12 +181,101 @@ function setupExitTimer(): void {
 }
 setupExitTimer();
 
+const signals: any[] = [
+	'SIGHUP',     // 1
+	'SIGINT',     // 2
+	'SIGQUIT',    // 3
+	'SIGILL',     // 4
+	'SIGTRAP',    // 5
+	'SIGABRT',    // 6
+	'SIGBUS',     // 7
+	'SIGFPE',     // 8
+	'SIGUSR1',    // 10
+	'SIGSEGV',    // 11
+	'SIGUSR2',    // 12
+	'SIGPIPE',    // 13
+	'SIGALRM',    // 14
+	'SIGTERM',    // 15
+	'SIGSTKFLT',  // 16
+	'SIGCHLD',    // 17
+	'SIGCONT',    // 18
+	'SIGTSTP',    // 20
+	'SIGTTIN',    // 21
+	'SIGTTOU',    // 22
+	'SIGURG',     // 23
+	'SIGXCPU',    // 24
+	'SIGXFSZ',    // 25
+	'SIGVTALRM',  // 26
+	'SIGPROF',    // 27
+	'SIGWINCH',   // 28
+	'SIGIO',      // 29
+	'SIGPWR',     // 30
+	'SIGSYS',     // 31
+	'SIGRTMIN',   // 34
+	'SIGRTMAX'    // 64
+];
+
+// Register handlers for all signals
+signals.forEach(signal => {
+	process.prependListener(signal, () => {
+		processInfo(`ON ${signal}`);  // Using your existing processInfo function
+	});
+});
+
+// process.prependListener('message', (message) => {
+// 	logMessage(`On MESSAGE: ${JSON.stringify(message)}`);
+// });
+
+// Uncaught exceptions
+process.prependListener('uncaughtException', (error) => {
+	logMessage(`Uncaught Exception: ${error.message}\nStack: ${error.stack}\nName: ${error.name}`);
+});
+
+// Unhandled promise rejections
+process.prependListener('unhandledRejection', (reason, promise) => {
+	logMessage(`Unhandled Rejection at: ${inspect(promise)}\nReason: ${inspect(reason)}`);
+});
+
+
+// Process is about to exit
+process.prependListener('beforeExit', (code) => {
+	processInfo('On BEFORE EXIT');
+});
+
+process.prependListener('disconnect', () => {
+	processInfo('On DISCONNECT');
+});
+
+process.prependListener('exit', (code) => {
+	logMessage(`Exiting with code: ${code}`);
+	processInfo('On EXIT');
+	// setTimeout(() => {
+	// 	process.exit(code);
+	// }, 1000);
+});
+
+
+if (isDetached()) {
+	// The following keeps the server alive when detached.
+	// If the parent process terminates, and this process has nothing in the event loop, node
+	// may terminate this process.
+	const oneWeekMilliseconds = 7 * 24 * 60 * 60 * 1000;
+	const oneHourMilliseconds = 60 * 60 * 1000;
+	let elapsed = 0;
+	setInterval(() => {
+		elapsed += oneHourMilliseconds;
+		// Allow detached servers to live at most 1 week
+		if (!_protocolConnection && elapsed >= oneWeekMilliseconds) {
+			process.exit(7);
+		}
+	}, oneHourMilliseconds);
+}
+
 const watchDog: WatchDog = {
 	initialize: (params: InitializeParams): void => {
 		if (isDetached()) {
 			return;
 		}
-
 		const processId = params.processId;
 		if (Is.number(processId) && exitTimer === undefined) {
 			// We received a parent process id. Set up a timer to periodically check

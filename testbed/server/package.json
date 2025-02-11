@@ -11,6 +11,6 @@
 	},
 	"scripts": {
 		"compile": "tsc -b ./tsconfig.json",
-		"watch": "tsc --watch -b ./tsconfig.json"
+		"watch": "tsc --watch"
 	}
 }

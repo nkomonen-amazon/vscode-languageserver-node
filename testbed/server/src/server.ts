@@ -104,9 +104,11 @@ function computeLegend(capability: SemanticTokensClientCapabilities): SemanticTo
 	return { tokenTypes, tokenModifiers };
 }
 
-
 connection.onInitialize((params, cancel, progress): Thenable<InitializeResult> | ResponseError<InitializeError> | InitializeResult => {
 	progress.begin('Initializing test server');
+
+	connection.console.log(`Parent Process ID ${process.ppid}`);
+	connection.console.log(`Process ID ${process.pid}`);
 
 	const workspaceFolders = params.workspaceFolders;
 	if (workspaceFolders !== undefined && workspaceFolders !== null) {

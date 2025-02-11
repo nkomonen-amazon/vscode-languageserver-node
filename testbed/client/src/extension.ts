@@ -6,7 +6,7 @@
 
 import * as path from 'path';
 import { commands, ExtensionContext, workspace, window, Uri } from 'vscode';
-import { LanguageClient, LanguageClientOptions, ServerOptions, TransportKind, NotificationType } from 'vscode-languageclient/node';
+import { LanguageClient, LanguageClientOptions, ServerOptions, TransportKind, NotificationType, ExecutableOptions, Executable } from 'vscode-languageclient/node';
 
 let client: LanguageClient;
 
@@ -14,11 +14,14 @@ export async function activate(context: ExtensionContext) {
 	// We need to go one level up since an extension compile the js code into
 	// the output folder.
 	const module = path.join(__dirname, '..', '..', 'server', 'out', 'server.js');
-	const debugOptions = { execArgv: ['--nolazy', '--inspect=6012'] };
 	const serverOptions: ServerOptions = {
-		run: { module, transport: TransportKind.ipc },
-		debug: { module, /* runtime: 'node.exe', */ transport: TransportKind.ipc, options: debugOptions}
+		run: { module, transport: TransportKind.ipc, options: { detached: true } },
+		debug: { module, /* runtime: 'node.exe', */ transport: TransportKind.ipc, options: { execArgv: ['--nolazy', '--inspect=6012'], detached: true }},
 	};
+	// const serverOptions: { run: Executable; debug: Executable } = {
+	// 	run: { command: 'node', args: [module], transport: TransportKind.stdio, options: { detached: true } },
+	// 	debug: { command: 'node', args: [module], transport: TransportKind.stdio, options: { detached: true }},
+	// };
 
 	const clientOptions: LanguageClientOptions = {
 		documentSelector: [
@@ -119,5 +122,5 @@ REM or .bmp extension from c:\\source to c:\\images;;`;
 }
 
 export function deactivate() {
-	return client.stop();
+	// return client.stop();
 }
